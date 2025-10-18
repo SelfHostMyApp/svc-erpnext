@@ -1,0 +1,141 @@
+service_id: erpnext
+service_name: erpnext
+service_unit_name: erpnext
+service_image: docker.io/frappe/erpnext-nginx:v15.38.7
+version: "15.38.7"
+service_ip: "{{ erpnext_container_ip }}"
+service_ports:
+  - target: 8080
+    published: {{ erpnext_service_port }}
+    protocol: tcp
+service_env:
+  - name: SITE_NAME
+    value: "{{ erpnext_site_name }}"
+  - name: SITE_HOST
+    value: "{{ erpnext_site_url }}"
+  - name: DB_HOST
+    value: "{{ erpnext_db_host }}"
+  - name: DB_PORT
+    value: "{{ erpnext_db_port | string }}"
+  - name: DB_NAME
+    value: "{{ erpnext_db_name }}"
+  - name: DB_USER
+    value: "{{ erpnext_db_user }}"
+  - name: REDIS_CACHE
+    value: "{{ erpnext_redis_cache_url }}"
+  - name: REDIS_QUEUE
+    value: "{{ erpnext_redis_queue_url }}"
+  - name: REDIS_SOCKETIO
+    value: "{{ erpnext_redis_socketio_url }}"
+  - name: FRAPPE_SITE_NAME_HEADER
+    value: "{{ erpnext_site_url }}"
+service_volumes:
+  - name: sites
+    source: "{{ erpnext_sites_volume }}"
+    target: /home/frappe/frappe-bench/sites
+    driver: local
+    size: "{{ erpnext_sites_volume_size_gb }}Gi"
+  - name: logs
+    source: "{{ erpnext_logs_volume }}"
+    target: /home/frappe/frappe-bench/logs
+    driver: local
+    size: "{{ erpnext_logs_volume_size_gb }}Gi"
+service_resources:
+  memory_mb: "{{ erpnext_container_memory_mb }}"
+  cpu_cores: "{{ erpnext_container_cpu_cores }}"
+service_namespace: "{{ erpnext_kubernetes_namespace }}"
+service_replicas: "{{ erpnext_kubernetes_replicas }}"
+service_packages:
+  - nginx
+  - supervisor
+  - python3-pip
+service_services:
+  - name: supervisor
+    enabled: true
+    state: started
+service_container:
+  vmid: "{{ erpnext_container_vmid }}"
+  hostname: "{{ service_name }}"
+  ostemplate: "{{ erpnext_container_template }}"
+  disk: "{{ erpnext_sites_volume_size_gb + erpnext_logs_volume_size_gb }}"
+  cores: "{{ erpnext_container_cpu_cores }}"
+  memory: "{{ erpnext_container_memory_mb }}"
+  swap: "{{ erpnext_container_swap_mb }}"
+  bridge: "{{ erpnext_container_bridge }}"
+  cidr: "{{ erpnext_container_cidr }}"
+  gateway: "{{ erpnext_container_gateway }}"
+  interface: "{{ erpnext_container_interface }}"
+  onboot: yes
+  unprivileged: yes
+  features: nesting=1,keyctl=1
+requires:
+  - mariadb
+  - redis
+exports:
+  env:
+    - name: ERP_SITE_URL
+      value: "{{ erpnext_site_url }}"
+    - name: ERP_SITE_NAME
+      value: "{{ erpnext_site_name }}"
+storage:
+  - name: sites
+    path: /home/frappe/frappe-bench/sites
+    size: "{{ erpnext_sites_volume_size_gb }}G"
+  - name: logs
+    path: /home/frappe/frappe-bench/logs
+    size: "{{ erpnext_logs_volume_size_gb }}G"
+health:
+  cmd:
+    - curl
+    - -fsS
+    - "http://127.0.0.1:{{ erpnext_service_port }}/api/method/ping"
+  interval: 20s
+  timeout: 10s
+  retries: 6
+runtime_templates:
+  proxmox: proxmox.yml.j2
+  docker: docker.yml.j2
+  podman: podman.yml.j2
+  kubernetes: kubernetes.yml.j2
+  baremetal: baremetal.yml.j2
+secrets:
+  env:
+    - name: DB_PASSWORD
+      value: "{{ erpnext_db_password }}"
+    - name: ADMIN_PASSWORD
+      value: "{{ erpnext_admin_password }}"
+    - name: SITE_ADMIN_PASSWORD
+      value: "{{ erpnext_site_admin_password }}"
+
+erpnext_service_port: 8081
+erpnext_sites_volume: erpnext-sites
+erpnext_logs_volume: erpnext-logs
+erpnext_sites_volume_size_gb: 40
+erpnext_logs_volume_size_gb: 10
+erpnext_container_vmid: 220
+erpnext_container_ip: 192.168.100.13
+erpnext_container_gateway: 192.168.100.1
+erpnext_container_cidr: 24
+erpnext_container_bridge: vmbr0
+erpnext_container_interface: eth0
+erpnext_container_cpu_cores: 4
+erpnext_container_memory_mb: 6144
+erpnext_container_swap_mb: 4096
+erpnext_container_template: local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+erpnext_kubernetes_namespace: business
+erpnext_kubernetes_replicas: 1
+erpnext_site_name: "{{ lookup('env', 'ERP_SITE_NAME') | default('erp.example.com', true) }}"
+erpnext_site_url: "{{ lookup('env', 'ERP_SITE_URL') | default('https://erp.example.com', true) }}"
+erpnext_db_host: "{{ lookup('env', 'ERP_DB_HOST') | default('mariadb', true) }}"
+erpnext_db_port: "{{ lookup('env', 'ERP_DB_PORT') | default(3306, true) }}"
+erpnext_db_name: "{{ lookup('env', 'ERP_DB_NAME') | default('erpnext', true) }}"
+erpnext_db_user: "{{ lookup('env', 'ERP_DB_USER') | default('erpnext', true) }}"
+erpnext_db_password: "{{ lookup('env', 'ERP_DB_PASSWORD') | default('change-me-erp-db', true) }}"
+erpnext_admin_password: "{{ lookup('env', 'ERP_ADMIN_PASSWORD') | default('change-me-admin', true) }}"
+erpnext_site_admin_password: "{{ lookup('env', 'ERP_SITE_ADMIN_PASSWORD') | default('change-me-site', true) }}"
+erpnext_redis_host: "{{ lookup('env', 'ERP_REDIS_HOST') | default('redis', true) }}"
+erpnext_redis_port: "{{ lookup('env', 'ERP_REDIS_PORT') | default(6379, true) }}"
+erpnext_redis_password: "{{ lookup('env', 'ERP_REDIS_PASSWORD') | default('change-me-redis', true) }}"
+erpnext_redis_cache_url: "{{ lookup('env', 'ERP_REDIS_CACHE_URL') | default('redis://:' ~ erpnext_redis_password ~ '@' ~ erpnext_redis_host ~ ':' ~ (erpnext_redis_port | string) ~ '/0', true) }}"
+erpnext_redis_queue_url: "{{ lookup('env', 'ERP_REDIS_QUEUE_URL') | default('redis://:' ~ erpnext_redis_password ~ '@' ~ erpnext_redis_host ~ ':' ~ (erpnext_redis_port | string) ~ '/1', true) }}"
+erpnext_redis_socketio_url: "{{ lookup('env', 'ERP_REDIS_SOCKETIO_URL') | default('redis://:' ~ erpnext_redis_password ~ '@' ~ erpnext_redis_host ~ ':' ~ (erpnext_redis_port | string) ~ '/2', true) }}"
